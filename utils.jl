@@ -5,6 +5,7 @@ const ps = PauliStrings
 using Random
 using JLD2
 using Dates
+using JSON
 
 
 ### Gate application functions ###
@@ -56,18 +57,15 @@ function single_Z_operators(N)
     return ops
 end
 
-function u1_coords_sample()
-    θ1, θ2, θ3, θ4, Jx, Jz = rand(Uniform(-π, π), 6)
-    return θ1, θ2, θ3, θ4, Jx, Jz
-end
 
-function random_circuit(N; seed=0)
-    Random.seed!(seed)
+function random_circuit(N, trial)
+    angles = load_angles(N)[trial]
     gate_list = []
     angle_list = []
 
     for j in 1:2:N
-        θ1, θ2, θ3, θ4, Jx, Jz = u1_coords_sample()
+        angles_bond = angles[j]
+        θ1, θ2, Jx, Jz, θ3, θ4 = angles_bond["θ1"], angles_bond["θ2"], angles_bond["Jx"], angles_bond["Jz"], angles_bond["θ3"], angles_bond["θ4"]
 
         rot_1 = ps.Operator(N)
         rot_1 += "Z", j
@@ -106,7 +104,8 @@ function random_circuit(N; seed=0)
     end
 
     for j in 2:2:N
-        θ1, θ2, θ3, θ4, Jx, Jz = u1_coords_sample()
+        angles_bond = angles[j]
+        θ1, θ2, Jx, Jz, θ3, θ4 = angles_bond["θ1"], angles_bond["θ2"], angles_bond["Jx"], angles_bond["Jz"], angles_bond["θ3"], angles_bond["θ4"]
 
         rot_1 = ps.Operator(N)
         rot_1 += "Z", j
@@ -148,9 +147,17 @@ end
 
 ### Evolution ###
 
-function two_point_correlators_random(N, num_steps, O; M=2^10, noise=0, keep=Operator(0), seed=0)
+function load_angles(N::Int)
+    filename = "random_archive/angles_N$(N).json"
+    if !isfile(filename)
+        error("File $filename does not exist.")
+    end
+    return JSON.parsefile(filename)
+end
+
+function two_point_correlators_random(N, num_steps, trial, O; M=2^10, noise=0, keep=Operator(0))
     correlators = []
-    gate_list, angle_list = random_circuit(N, seed=seed)
+    gate_list, angle_list = random_circuit(N, trial)
     all_local_Z = single_Z_operators(N)
     for t in 1:num_steps
         println("Time Step $t")
@@ -178,7 +185,7 @@ function run_pauli_trial(N, num_steps, M, site, trial; save_dir="pauli_results")
     to = TimerOutput()
     runtime = @elapsed begin
         @timeit to "Pauli evolution" begin
-            results, angle_list = two_point_correlators_random(N, num_steps, O; M=M, noise=0, keep=keep_op, seed=trial)
+            results, angle_list = two_point_correlators_random(N, num_steps, trial, O; M=M, noise=0, keep=keep_op)
         end
     end
 

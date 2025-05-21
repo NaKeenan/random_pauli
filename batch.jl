@@ -1,11 +1,11 @@
 # run_all_trials.jl
 
 # Define your parameter arrays
-Ns = [10, 12]
+Ns = [16]
 Ms = [4096, 8192]
-sites = [1, 2, 3]
-trials = 1:5
-num_steps = 10
+sites = 1:16
+trials = 1:100
+num_steps = 10000
 
 # Path to your run_pauli_trial script
 run_script = "./run_pauli_trial.jl"
