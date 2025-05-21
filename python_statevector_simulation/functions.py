@@ -600,8 +600,8 @@ def gate_xyz_disordered(h1, h2, Jx, Jy, Jz, h3, h4):
     """Return the unitary matrix for the disordered XXZ model."""
     U_H1 = np.diag(np.exp(-.5j*np.array([h1+h2, h1-h2, h2-h1, -h1-h2])))
     U_H2 = np.diag(np.exp(-.5j*np.array([h3+h4, h3-h4, h4-h3, -h3-h4])))
-    U_XX = II * np.cos(Jx) - 1.0j * XX * np.sin(J)
-    U_YY = II * np.cos(Jy) - 1.0j * YY * np.sin(J)
+    U_XX = II * np.cos(Jx) - 1.0j * XX * np.sin(Jx)
+    U_YY = II * np.cos(Jy) - 1.0j * YY * np.sin(Jy)
     U_ZZ = II * np.cos(Jz) - 1.0j * ZZ * np.sin(Jz)
     U_XXZ = U_XX @ U_YY @ U_ZZ
     return U_H1 @ U_XXZ @ U_H2
@@ -658,13 +658,12 @@ def get_magnetization_slow(st, N, operators=None):
         res[i] = st.conj().dot(op @ st)
     return np.array(res)
 
-
 def get_magnetization(st, N):
     id_ = np.array([1,1])
     up = np.array([0,1])
     
     res = np.zeros(N, np.float64)
-    for i in range(N):
+    for i in prange(N):
         st_up = st.copy()
         st_dw = st.copy()
         ops = [id_] * N
