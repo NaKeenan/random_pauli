@@ -1,25 +1,6 @@
 import numpy as np
 import functions as fn
-import time
-
-def print_time(t, T, start_time):
-    end_time = time.time()
-    if t % 100 == 0:
-        elapsed =  - start_time
-        avg_per_iter = elapsed / t
-        remaining = avg_per_iter * (T - t)
-
-        # format ETA as H:MM:SS
-        eta_h = int(remaining) // 3600
-        eta_m = (int(remaining) % 3600) // 60
-        eta_s = int(remaining) % 60
-
-        print(
-            f"[{t}/{T}] "
-            f"Elapsed: {elapsed:.1f}s, "
-            f"ETA: {eta_h:d}:{eta_m:02d}:{eta_s:02d}"
-        )
-    return end_time
+from tqdm import tqdm
 
 
 class Circuit:
@@ -43,18 +24,15 @@ class Circuit:
         """
         Run the circuit and calculate the mangetization
         """
-        magn_profile = np.zeros((T, self.N), dtype=np.float64)
+        magn_profile = np.zeros((T+1, self.N), dtype=np.float64)
+                
+        magn_profile[0] = fn.get_magnetization(state, self.N)
         
-        start_time = time.time()
-        
-        magn_profile[0] = fn.get_magnetization(state, self.N, self.operators)
-        
-        for t in range(1,T+1):
+        for t in tqdm(range(1,T+1)):
             
             state = fn.apply_U(state, self.gates, self.order, masks_dict, None)   
             
-            magn_profile[t] = fn.get_magnetization(state, self.N, self.operators)         
+            magn_profile[t] = fn.get_magnetization(state, self.N)         
 
-            start_time = print_time(t, T, start_time)
                 
         return magn_profile

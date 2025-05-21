@@ -644,7 +644,7 @@ def gen_Jz(N):
         Jz += op
     return Jz
 
-def get_magnetization(st, N, operators=None):
+def get_magnetization_slow(st, N, operators=None):
     id_ = np.diag([1,1])
     sz = np.diag([1,-1])
     res = np.zeros(N, dtype=np.float64)
@@ -657,6 +657,27 @@ def get_magnetization(st, N, operators=None):
             op = operators[i]
         res[i] = st.conj().dot(op @ st)
     return np.array(res)
+
+
+def get_magnetization(st, N):
+    id_ = np.array([1,1])
+    up = np.array([0,1])
+    
+    res = np.zeros(N, np.float64)
+    for i in range(N):
+        st_up = st.copy()
+        st_dw = st.copy()
+        ops = [id_] * N
+        ops[i] = up
+        up_m = reduce(np.kron, ops)
+
+        st_up[up_m == 0] = 0
+        st_dw[up_m == 1] = 0
+        
+        res[i] = (st.conj().dot(st_up - st_dw)).real
+        
+    return res
+
 
 
 @njit(parallel=True, fastmath=True, cache=True)
