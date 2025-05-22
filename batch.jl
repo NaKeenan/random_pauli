@@ -5,7 +5,7 @@ Ns = [16]
 Ms = [4096, 8192]
 sites = 1:16
 trials = 1:100
-num_steps = 10000
+num_steps = 1000
 
 # Path to your run_pauli_trial script
 run_script = "./run_pauli_trial.jl"
