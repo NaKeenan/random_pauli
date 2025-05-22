@@ -32,7 +32,6 @@ class Circuit:
             
             state = fn.apply_U(state, self.gates, self.order, masks_dict, None)   
             
-            magn_profile[t] = fn.get_magnetization(state, self.N)         
-
+            magn_profile[t] = fn.get_magnetization(state, self.N) 
                 
-        return magn_profile
+        return magn_profile, state
