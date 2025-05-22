@@ -155,21 +155,34 @@ function load_angles(N::Int)
     return JSON.parsefile(filename)
 end
 
-function two_point_correlators_random(N, num_steps, trial, O; M=2^10, noise=0, keep=Operator(0))
+function weight_dist(O)
+    return [O.coeffs[i] * ps.pauli_weight(O.strings[i]) for i in 1:length(O.strings)]
+end
+
+function two_point_correlators_random(N, num_steps, trial, O; M=2^10, noise=0, keep=Operator(0), calc_weight_dist=false)
     correlators = []
+    weight_dist_array = []
     gate_list, angle_list = random_circuit(N, trial)
     all_local_Z = single_Z_operators(N)
     for t in 1:num_steps
         println("Time Step $t")
         correlators_t = [ps.trace_product(O, local_Z)/big(2)^N for local_Z in all_local_Z]
         push!(correlators, correlators_t)
+        if calc_weight_dist
+            push!(weight_dist_array, weight_dist(O))
+        end
         O = apply_gate_list(O, gate_list, angle_list; M=M, noise=noise, keep=keep)
     end
-    return real.(correlators), angle_list
+    if calc_weight_dist
+        output = [real.(correlators), angle_list, weight_dist_array]
+    else
+        output = [real.(correlators), angle_list]
+    end
+    return output
 end;
 
 
-function run_pauli_trial(N, num_steps, M, site, trial; save_dir="pauli_results")
+function run_pauli_trial(N, num_steps, M, site, trial; save_dir="pauli_results", calc_weight_dist=false)
     mkpath(save_dir)
 
     keep_op = ps.Operator(N)
@@ -185,7 +198,16 @@ function run_pauli_trial(N, num_steps, M, site, trial; save_dir="pauli_results")
     to = TimerOutput()
     runtime = @elapsed begin
         @timeit to "Pauli evolution" begin
-            results, angle_list = two_point_correlators_random(N, num_steps, trial, O; M=M, noise=0, keep=keep_op)
+            ret = two_point_correlators_random(N, num_steps, trial, O; M=M, noise=0, keep=keep_op, calc_weight_dist=calc_weight_dist)
+
+            if length(ret) == 2
+                results, angle_list = ret
+                weight_dist_array = nothing
+            elseif length(ret) == 3
+                results, angle_list, weight_dist_array = ret
+            else
+                error("Unexpected number of returned values")
+            end
         end
     end
 
@@ -199,7 +221,8 @@ function run_pauli_trial(N, num_steps, M, site, trial; save_dir="pauli_results")
         "runtime" => runtime,
         "timestamp" => Dates.now(),
         "save_dir" => save_dir,
-        "angle_list" => angle_list
+        "angle_list" => angle_list,
+        "weight_dist_array" => weight_dist_array
     )
 
     filepath = joinpath(save_dir, "pauli_M$(M)_site$(site)_trial$(trial).jld2")

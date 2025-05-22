@@ -1,2 +1,1 @@
-SUCCESS
-Runtime: 92.60333425 seconds
+SKIPPED: Output file already exists at pauli_results/pauli_M4096_site1_trial1.jld2
