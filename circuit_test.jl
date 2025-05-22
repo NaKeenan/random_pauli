@@ -8,5 +8,3 @@ function operator_test(N, trial, M=2^12)
     O = apply_gate_list(O, gate_list, angle_list; M=M)
     return O 
 end
-
-println(operator_test(16, 1))
