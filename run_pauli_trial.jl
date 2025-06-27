@@ -22,6 +22,9 @@ parsed_args = ArgParseSettings()
     "--calc_weight_dist"
         arg_type = Bool
         default = true
+    "--save_coeffs"
+        arg_type = Bool
+        default = true
 end
 args = parse_args(parsed_args)
 
@@ -30,8 +33,8 @@ mkpath(args["log_dir"])
 mkpath(args["save_dir"])
 
 # Construct file paths
-log_file = joinpath(args["log_dir"], "trial$(args["trial"])_site$(args["site"])_M$(args["M"]).log")
-output_file = joinpath(args["save_dir"], "pauli_M$(args["M"])_site$(args["site"])_trial$(args["trial"]).jld2")  # example output file name
+log_file = joinpath(args["log_dir"], "trial$(args["trial"])_site$(args["site"])_M$(args["M"])_N$(args["N"]).log")
+output_file = joinpath(args["save_dir"], "pauli_M$(args["M"])_site$(args["site"])_trial$(args["trial"])_N$(args["N"]).jld2")  # example output file name
 
 open(log_file, "w") do io
     if isfile(output_file)
@@ -41,7 +44,7 @@ open(log_file, "w") do io
             runtime = run_pauli_trial(
                 args["N"], args["num_steps"], args["M"],
                 args["site"], args["trial"];
-                save_dir=args["save_dir"], calc_weight_dist=args["calc_weight_dist"]
+                save_dir=args["save_dir"], calc_weight_dist=args["calc_weight_dist"], save_coeffs=args["save_coeffs"]
             )
             println(io, "SUCCESS")
             println(io, "Runtime: $runtime seconds")
