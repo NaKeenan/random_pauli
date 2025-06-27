@@ -145,6 +145,53 @@ function random_circuit(N, trial)
     return gate_list, angle_list
 end
 
+function random_gate(N, trial)
+    angles = load_angles(N)[trial]
+    gate_list = []
+    angle_list = []
+
+    j = 1
+    angles_bond = angles[j]
+    θ1, θ2, Jx, Jz, θ3, θ4 = angles_bond["θ1"], angles_bond["θ2"], angles_bond["Jx"], angles_bond["Jz"], angles_bond["θ3"], angles_bond["θ4"]
+
+    rot_1 = ps.Operator(N)
+    rot_1 += "Z", j
+    push!(gate_list, rot_1)
+    push!(angle_list, θ1)
+
+    rot_2 = ps.Operator(N)
+    rot_2 += "Z", j+1
+    push!(gate_list, rot_2)
+    push!(angle_list, θ2)
+
+    rot_xx = ps.Operator(N)
+    rot_xx += "X", j, "X", j+1
+    push!(gate_list, rot_xx)
+    push!(angle_list, Jx)
+
+    rot_yy = ps.Operator(N)
+    rot_yy += "Y", j, "Y", j+1
+    push!(gate_list, rot_yy)
+    push!(angle_list, Jx)
+
+    rot_zz = ps.Operator(N)
+    rot_zz += "Z", j, "Z", j+1
+    push!(gate_list, rot_zz)
+    push!(angle_list, Jz)
+
+    rot_3 = ps.Operator(N)
+    rot_3 += "Z", j
+    push!(gate_list, rot_3)
+    push!(angle_list, θ3)
+
+    rot_4 = ps.Operator(N)
+    rot_4 += "Z", j+1
+    push!(gate_list, rot_4)
+    push!(angle_list, θ4)
+
+    return gate_list, angle_list
+end
+
 ### Evolution ###
 
 function load_angles(N::Int)

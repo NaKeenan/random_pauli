@@ -28,11 +28,10 @@ class Circuit:
                 
         magn_profile[0] = fn.get_magnetization(state, self.N)
         
-        for t in (range(1,T+1)):
+        for t in tqdm(range(1,T+1)):
             
             state = fn.apply_U(state, self.gates, self.order, masks_dict, None)   
             
-            magn_profile[t] = fn.get_magnetization(state, self.N)         
-
+            magn_profile[t] = fn.get_magnetization(state, self.N) 
                 
-        return magn_profile
+        return magn_profile, state

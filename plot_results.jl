@@ -48,7 +48,8 @@ function plot_average_for_N_multiple_M(N_target::Int; results_dir="pauli_results
     for (M, results_array) in sort(collect(results_by_M))
         avg_result = average_results(results_array)
         num_steps = length(avg_result)
-        plot!(plt, 1:num_steps, avg_result, label="M = $M", yaxis=:log, xaxis=:log)
+
+        plot!(plt, 1:num_steps, avg_result, label="M = $M")
     end
 
     xlabel!(plt, "Time step")

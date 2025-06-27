@@ -28,14 +28,14 @@ parsed_args = ArgParseSettings()
 end
 args = parse_args(parsed_args)
 
-# Create directories if they don't exist
+# Create log directory if it doesn't exist
 mkpath(args["log_dir"])
-mkpath(args["save_dir"])
 
 # Construct file paths
 log_file = joinpath(args["log_dir"], "trial$(args["trial"])_site$(args["site"])_M$(args["M"])_N$(args["N"]).log")
 output_file = joinpath(args["save_dir"], "pauli_M$(args["M"])_site$(args["site"])_trial$(args["trial"])_N$(args["N"]).jld2")  # example output file name
 
+# Run with error handling and logging
 open(log_file, "w") do io
     if isfile(output_file)
         println(io, "SKIPPED: Output file already exists at $output_file")
