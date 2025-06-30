@@ -25,6 +25,9 @@ parsed_args = ArgParseSettings()
     "--save_coeffs"
         arg_type = Bool
         default = true
+    "--manual"
+        arg_type = Bool
+        default = false
 end
 args = parse_args(parsed_args)
 
@@ -41,11 +44,19 @@ open(log_file, "w") do io
         println(io, "SKIPPED: Output file already exists at $output_file")
     else
         try
-            runtime = run_pauli_trial(
-                args["N"], args["num_steps"], args["M"],
-                args["site"], args["trial"];
-                save_dir=args["save_dir"], calc_weight_dist=args["calc_weight_dist"], save_coeffs=args["save_coeffs"]
-            )
+            if args["manual"]
+                runtime = run_pauli_manual(
+                    args["N"], args["num_steps"], args["M"],
+                    args["site"];
+                    save_dir=args["save_dir"], calc_weight_dist=args["calc_weight_dist"], save_coeffs=args["save_coeffs"]
+                )
+            else
+                runtime = run_pauli_trial(
+                    args["N"], args["num_steps"], args["M"],
+                    args["site"], args["trial"];
+                    save_dir=args["save_dir"], calc_weight_dist=args["calc_weight_dist"], save_coeffs=args["save_coeffs"]
+                )
+            end
             println(io, "SUCCESS")
             println(io, "Runtime: $runtime seconds")
         catch err

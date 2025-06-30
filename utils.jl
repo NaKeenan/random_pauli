@@ -145,52 +145,92 @@ function random_circuit(N, trial)
     return gate_list, angle_list
 end
 
-function random_gate(N, trial)
-    angles = load_angles(N)[trial]
+function manual_circuit(N)
+    angles = load_manual(N)
     gate_list = []
     angle_list = []
 
-    j = 1
-    angles_bond = angles[j]
-    θ1, θ2, Jx, Jz, θ3, θ4 = angles_bond["θ1"], angles_bond["θ2"], angles_bond["Jx"], angles_bond["Jz"], angles_bond["θ3"], angles_bond["θ4"]
+    for j in 1:2:N
+        θ1, θ2, Jx, Jz, θ3, θ4 = angles["θ1"], angles["θ2"], angles["Jx"], angles["Jz"], angles["θ3"], angles["θ4"]
 
-    rot_1 = ps.Operator(N)
-    rot_1 += "Z", j
-    push!(gate_list, rot_1)
-    push!(angle_list, θ1)
+        rot_1 = ps.Operator(N)
+        rot_1 += "Z", j
+        push!(gate_list, rot_1)
+        push!(angle_list, θ1)
 
-    rot_2 = ps.Operator(N)
-    rot_2 += "Z", j+1
-    push!(gate_list, rot_2)
-    push!(angle_list, θ2)
+        rot_2 = ps.Operator(N)
+        rot_2 += "Z", j+1
+        push!(gate_list, rot_2)
+        push!(angle_list, θ2)
 
-    rot_xx = ps.Operator(N)
-    rot_xx += "X", j, "X", j+1
-    push!(gate_list, rot_xx)
-    push!(angle_list, Jx)
+        rot_xx = ps.Operator(N)
+        rot_xx += "X", j, "X", j+1
+        push!(gate_list, rot_xx)
+        push!(angle_list, Jx)
 
-    rot_yy = ps.Operator(N)
-    rot_yy += "Y", j, "Y", j+1
-    push!(gate_list, rot_yy)
-    push!(angle_list, Jx)
+        rot_yy = ps.Operator(N)
+        rot_yy += "Y", j, "Y", j+1
+        push!(gate_list, rot_yy)
+        push!(angle_list, Jx)
 
-    rot_zz = ps.Operator(N)
-    rot_zz += "Z", j, "Z", j+1
-    push!(gate_list, rot_zz)
-    push!(angle_list, Jz)
+        rot_zz = ps.Operator(N)
+        rot_zz += "Z", j, "Z", j+1
+        push!(gate_list, rot_zz)
+        push!(angle_list, Jz)
 
-    rot_3 = ps.Operator(N)
-    rot_3 += "Z", j
-    push!(gate_list, rot_3)
-    push!(angle_list, θ3)
+        rot_3 = ps.Operator(N)
+        rot_3 += "Z", j
+        push!(gate_list, rot_3)
+        push!(angle_list, θ3)
 
-    rot_4 = ps.Operator(N)
-    rot_4 += "Z", j+1
-    push!(gate_list, rot_4)
-    push!(angle_list, θ4)
+        rot_4 = ps.Operator(N)
+        rot_4 += "Z", j+1
+        push!(gate_list, rot_4)
+        push!(angle_list, θ4)
+    end
 
+    for j in 2:2:N
+        θ1, θ2, Jx, Jz, θ3, θ4 = angles["θ1"], angles["θ2"], angles["Jx"], angles["Jz"], angles["θ3"], angles["θ4"]
+
+        rot_1 = ps.Operator(N)
+        rot_1 += "Z", j
+        push!(gate_list, rot_1)
+        push!(angle_list, θ1)
+
+        rot_2 = ps.Operator(N)
+        rot_2 += "Z", j%N+1
+        push!(gate_list, rot_2)
+        push!(angle_list, θ2)
+
+        rot_xx = ps.Operator(N)
+        rot_xx += "X", j, "X", j%N+1
+        push!(gate_list, rot_xx)
+        push!(angle_list, Jx)
+
+        rot_yy = ps.Operator(N)
+        rot_yy += "Y", j, "Y", j%N+1
+        push!(gate_list, rot_yy)
+        push!(angle_list, Jx)
+
+        rot_zz = ps.Operator(N)
+        rot_zz += "Z", j, "Z", j%N+1
+        push!(gate_list, rot_zz)
+        push!(angle_list, Jz)
+
+        rot_3 = ps.Operator(N)
+        rot_3 += "Z", j
+        push!(gate_list, rot_3)
+        push!(angle_list, θ3)
+
+        rot_4 = ps.Operator(N)
+        rot_4 += "Z", j%N+1
+        push!(gate_list, rot_4)
+        push!(angle_list, θ4)
+    end
     return gate_list, angle_list
 end
+
+
 
 ### Evolution ###
 
@@ -200,6 +240,19 @@ function load_angles(N::Int)
         error("File $filename does not exist.")
     end
     return JSON.parsefile(filename)
+end
+
+function load_manual(N::Int)
+    filename = "params.json"
+    if !isfile(filename)
+        error("File $filename does not exist.")
+    end
+    data = JSON.parsefile(filename)
+    if data["N"] != N
+        error("Incorrect N value")
+    else
+        return data
+    end
 end
 
 function weight_dist(O)
@@ -217,6 +270,33 @@ function two_point_correlators_random(N, num_steps, trial, O; M=2^10, noise=0, k
     weight_dist_array = []
     coeffs = []
     gate_list, angle_list = random_circuit(N, trial)
+    all_local_Z = single_Z_operators(N)
+    for t in 1:num_steps
+        println("Time Step $t")
+        correlators_t = [ps.trace_product(O, local_Z)/big(2)^N for local_Z in all_local_Z]
+        push!(correlators, correlators_t)
+
+        if calc_weight_dist
+            push!(weight_dist_array, weight_dist(O))
+        end
+
+        if save_coeffs
+            push!(coeffs, ps.op_to_strings(O))
+        end
+
+        O = apply_gate_list(O, gate_list, angle_list; M=M, noise=noise, keep=keep)
+    end
+
+    output = [real.(correlators), angle_list, weight_dist_array, coeffs]
+
+    return output
+end;
+
+function two_point_correlators_manual(N, num_steps, O; M=2^10, noise=0, keep=Operator(0), calc_weight_dist=true, save_coeffs=true)
+    correlators = []
+    weight_dist_array = []
+    coeffs = []
+    gate_list, angle_list = manual_circuit(N)
     all_local_Z = single_Z_operators(N)
     for t in 1:num_steps
         println("Time Step $t")
@@ -277,6 +357,48 @@ function run_pauli_trial(N, num_steps, M, site, trial; save_dir="pauli_results",
     )
 
     filepath = joinpath(save_dir, "pauli_M$(M)_site$(site)_trial$(trial)_N$(N).jld2")
+    @save filepath results params
+
+    return runtime
+end
+
+
+function run_pauli_manual(N, num_steps, M, site; save_dir="pauli_results_manual", calc_weight_dist=true, save_coeffs=true)
+    mkpath(save_dir)
+
+    keep_op = ps.Operator(N)
+    for local_Z in single_Z_operators(N)
+        keep_op += local_Z
+    end
+
+    O = ps.Operator(N)
+    O += "Z", site
+
+    println("Running PauliStrings: N=$N, M=$M, site=$site")
+
+    to = TimerOutput()
+    runtime = @elapsed begin
+        @timeit to "Pauli evolution" begin
+            ret = two_point_correlators_manual(N, num_steps, O; M=M, noise=0, keep=keep_op, calc_weight_dist=calc_weight_dist, save_coeffs=save_coeffs)
+            results, angle_list, weight_dist_array, coeffs = ret
+        end
+    end
+
+    # Construct metadata dictionary
+    params = Dict(
+        "N" => N,
+        "num_steps" => num_steps,
+        "M" => M,
+        "site" => site,
+        "runtime" => runtime,
+        "timestamp" => Dates.now(),
+        "save_dir" => save_dir,
+        "angle_list" => angle_list,
+        "weight_dist_array_fix" => weight_dist_array,
+        "coeffs" => coeffs
+    )
+
+    filepath = joinpath(save_dir, "pauli_M$(M)_site$(site)_N$(N).jld2")
     @save filepath results params
 
     return runtime
