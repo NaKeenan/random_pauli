@@ -6,7 +6,7 @@ using JSON
 
 # Parameters
 num_trials = 1000
-N = 22
+N = 12
 seed = 1234
 filename = "random_archive/angles_N$(N).json"
 # Angle keys

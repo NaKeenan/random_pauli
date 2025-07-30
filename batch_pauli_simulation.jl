@@ -4,11 +4,20 @@ Pkg.activate(".")
 using ArgParse
 
 """
-BATCH SIMULATION LAUNCHER FOR DIFFERENT M VALUES
+BATCH PAULI PROPAGATION SIMULATION LAUNCHER
 
 This script launches multiple Pauli propagation simulations with different truncation
-parameters M to study convergence behavior. It's designed to systematically explore
-how the truncation parameter affects the accuracy of correlation functions.
+parameters to study convergence behavior. It supports two truncation methods:
+
+1. M-based truncation: Keep the M largest Pauli terms (ps.trim method)
+2. Alpha-based pruning: Remove terms with |coefficient| < alpha (ps.prune method)
+
+The script can run systematic parameter sweeps to analyze how different truncation
+strategies affect the accuracy of correlation functions in U(1) symmetric quantum circuits.
+
+Usage examples:
+- M-based sweep: julia batch_pauli_simulation.jl --M_values "256,512,1024"
+- Alpha-based sweep: julia batch_pauli_simulation.jl --use_alpha --alpha_values "1e-12,1e-10,1e-8"
 """
 
 function parse_arguments()
@@ -34,6 +43,14 @@ function parse_arguments()
             help = "Comma-separated list of M values (e.g., '256,512,1024')"
             arg_type = String
             default = "256,512,1024,2048,4096"
+        "--alpha_values"
+            help = "Comma-separated list of alpha values (e.g., '1e-10,1e-12,1e-14')"
+            arg_type = String
+            default = ""
+        "--use_alpha"
+            help = "Use alpha pruning instead of M truncation"
+            arg_type = Bool
+            default = false
         "--save_dir"
             help = "Directory to save results"
             arg_type = String
@@ -44,6 +61,10 @@ function parse_arguments()
             default = "logs"
         "--calc_weight_dist"
             help = "Calculate weight distribution"
+            arg_type = Bool
+            default = true
+        "--calc_entropy"
+            help = "Calculate Pauli entropy"
             arg_type = Bool
             default = true
         "--save_coeffs"
@@ -79,18 +100,42 @@ function parse_M_values(M_string::String)
     return sort(M_values)
 end
 
-function check_file_exists(save_dir, M, site, trial, N)
+function parse_alpha_values(alpha_string::String)
+    """Parse comma-separated alpha values string into array of floats"""
+    if isempty(strip(alpha_string))
+        return Float64[]
+    end
+    alpha_strings = split(alpha_string, ",")
+    alpha_values = Float64[]
+    for alpha_str in alpha_strings
+        alpha_str = strip(alpha_str)
+        if !isempty(alpha_str)
+            push!(alpha_values, parse(Float64, alpha_str))
+        end
+    end
+    return sort(alpha_values, rev=true)  # Sort from largest to smallest
+end
+
+function check_file_exists(save_dir, M, alpha, site, trial, num_steps, N)
     """Check if output file already exists"""
-    filename = joinpath(save_dir, "pauli_M$(M)_site$(site)_trial$(trial)_N$(N).jld2")
+    if alpha !== nothing
+        filename = joinpath(save_dir, "pauli_alpha$(alpha)_site$(site)_trial$(trial)_T$(num_steps)_N$(N).jld2")
+    else
+        filename = joinpath(save_dir, "pauli_M$(M)_site$(site)_trial$(trial)_T$(num_steps)_N$(N).jld2")
+    end
     return isfile(filename)
 end
 
-function run_single_simulation(N, num_steps, M, site, trial, save_dir, log_dir, calc_weight_dist, save_coeffs, manual, skip_existing)
+function run_single_simulation(N, num_steps, M, alpha, site, trial, save_dir, log_dir, calc_weight_dist, calc_entropy, save_coeffs, manual, skip_existing)
     """Run a single simulation with given parameters"""
     
     # Check if file already exists
-    if skip_existing && check_file_exists(save_dir, M, site, trial, N)
-        println("SKIPPING M=$M: Output file already exists")
+    if skip_existing && check_file_exists(save_dir, M, alpha, site, trial, num_steps, N)
+        if alpha !== nothing
+            println("SKIPPING alpha=$alpha: Output file already exists")
+        else
+            println("SKIPPING M=$M: Output file already exists")
+        end
         return true
     end
     
@@ -99,31 +144,51 @@ function run_single_simulation(N, num_steps, M, site, trial, save_dir, log_dir, 
         "julia", "run_pauli_trial.jl",
         "--trial", string(trial),
         "--site", string(site),
-        "--M", string(M),
         "--num_steps", string(num_steps),
         "--N", string(N),
         "--save_dir", save_dir,
         "--log_dir", log_dir,
         "--calc_weight_dist", string(calc_weight_dist),
+        "--calc_entropy", string(calc_entropy),
         "--save_coeffs", string(save_coeffs),
         "--manual", string(manual)
     ]
     
-    println("Running simulation with M=$M...")
+    # Add either M or alpha parameter
+    if alpha !== nothing
+        push!(cmd_args, "--alpha", string(alpha))
+        println("Running simulation with alpha=$alpha...")
+    else
+        push!(cmd_args, "--M", string(M))
+        println("Running simulation with M=$M...")
+    end
+    
     println("Command: $(join(cmd_args, " "))")
     
     try
         # Run the command
         result = run(`$cmd_args`)
         if result.exitcode == 0
-            println("SUCCESS: M=$M completed successfully")
+            if alpha !== nothing
+                println("SUCCESS: alpha=$alpha completed successfully")
+            else
+                println("SUCCESS: M=$M completed successfully")
+            end
             return true
         else
-            println("ERROR: M=$M failed with exit code $(result.exitcode)")
+            if alpha !== nothing
+                println("ERROR: alpha=$alpha failed with exit code $(result.exitcode)")
+            else
+                println("ERROR: M=$M failed with exit code $(result.exitcode)")
+            end
             return false
         end
     catch e
-        println("ERROR: M=$M failed with exception: $e")
+        if alpha !== nothing
+            println("ERROR: alpha=$alpha failed with exception: $e")
+        else
+            println("ERROR: M=$M failed with exception: $e")
+        end
         return false
     end
 end
@@ -140,13 +205,25 @@ function main()
     site = args["site"]
     num_steps = args["num_steps"]
     M_values = parse_M_values(args["M_values"])
+    alpha_values = parse_alpha_values(args["alpha_values"])
+    use_alpha = args["use_alpha"]
     save_dir = args["save_dir"]
     log_dir = args["log_dir"]
     calc_weight_dist = args["calc_weight_dist"]
+    calc_entropy = args["calc_entropy"]
     save_coeffs = args["save_coeffs"]
     manual = args["manual"]
     parallel = args["parallel"]
     skip_existing = args["skip_existing"]
+    
+    # Determine which parameter array to use
+    if use_alpha && !isempty(alpha_values)
+        param_values = alpha_values
+        param_type = "alpha"
+    else
+        param_values = M_values
+        param_type = "M"
+    end
     
     # Print configuration
     println("Configuration:")
@@ -154,7 +231,13 @@ function main()
     println("  Trial = $trial")
     println("  Site = $site")
     println("  Time steps = $num_steps")
-    println("  M values = $M_values")
+    if param_type == "alpha"
+        println("  Alpha values = $alpha_values")
+        println("  Using alpha pruning method")
+    else
+        println("  M values = $M_values")
+        println("  Using M truncation method")
+    end
     println("  Save directory = $save_dir")
     println("  Log directory = $log_dir")
     println("  Manual mode = $manual")
@@ -167,9 +250,9 @@ function main()
     mkpath(log_dir)
     
     # Track results
-    successful_runs = Int[]
-    failed_runs = Int[]
-    skipped_runs = Int[]
+    successful_runs = []
+    failed_runs = []
+    skipped_runs = []
     
     # Run simulations
     println("Starting simulations...")
@@ -182,25 +265,37 @@ function main()
         println("Note: Parallel execution not yet implemented, running sequentially")
     end
     
-    for M in M_values
+    for param_val in param_values
         println("\n" * "="^50)
-        println("Processing M = $M")
+        if param_type == "alpha"
+            println("Processing alpha = $param_val")
+            M = nothing
+            alpha = param_val
+        else
+            println("Processing M = $param_val")
+            M = param_val
+            alpha = nothing
+        end
         println("="^50)
         
         # Check if already exists
-        if skip_existing && check_file_exists(save_dir, M, site, trial, N)
-            println("SKIPPING M=$M: Output file already exists")
-            push!(skipped_runs, M)
+        if skip_existing && check_file_exists(save_dir, M, alpha, site, trial, num_steps, N)
+            if param_type == "alpha"
+                println("SKIPPING alpha=$param_val: Output file already exists")
+            else
+                println("SKIPPING M=$param_val: Output file already exists")
+            end
+            push!(skipped_runs, param_val)
             continue
         end
         
         # Run simulation
-        success = run_single_simulation(N, num_steps, M, site, trial, save_dir, log_dir, calc_weight_dist, save_coeffs, manual, skip_existing)
+        success = run_single_simulation(N, num_steps, M, alpha, site, trial, save_dir, log_dir, calc_weight_dist, calc_entropy, save_coeffs, manual, skip_existing)
         
         if success
-            push!(successful_runs, M)
+            push!(successful_runs, param_val)
         else
-            push!(failed_runs, M)
+            push!(failed_runs, param_val)
         end
     end
     

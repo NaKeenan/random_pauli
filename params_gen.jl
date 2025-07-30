@@ -1,7 +1,7 @@
 using JSON
 
 # Parameters
-N = 8
+N = 14
 filename = "params.json"
 
 # Angle keys

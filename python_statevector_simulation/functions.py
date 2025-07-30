@@ -15,10 +15,6 @@ from math import comb
 from scipy.linalg import eigh
 import warnings
 from itertools import combinations
-from sympy.physics.quantum.cg import CG
-from sympy import S
-from sympy import sympify
-from scipy.linalg import expm
 from functools import reduce
 
 
@@ -33,37 +29,6 @@ def print_matrix(matr, precision=4):
     fmt = '\t'.join('{{:{}}}'.format(x) for x in lens if x != 0) or '.'
     table = [fmt.format(*row) for row in s]
     print('\n'.join(table))
-
-##########################################################################
-# Timekeeping functions
-##########################################################################
-
-def begin(verbosity=1):
-    if verbosity==2:
-        print('\n')
-        print('*' * terminal_width)
-        print(' '*4, 'Started:', datetime.datetime.now())
-    return None
-
-def finish(verbosity=1):
-    if verbosity==2:
-        print(' '*4, 'Finished:', datetime.datetime.now())
-        print('*' * terminal_width)
-        print('\n')
-    return None
-
-def tic(task_description_string, verbosity=1):
-    if verbosity==2:
-        print('-' * terminal_width)
-        print('---> ' + task_description_string)
-    return timeit.default_timer()
-
-def toc(tic_time, verbosity=1):
-    toc_time = timeit.default_timer()
-    if verbosity==2:
-        print(' '*4, round(toc_time - tic_time, 6), 'seconds')
-    return toc_time
-
 #########################################################################
 I = np.diag([1, 
                1])
@@ -257,111 +222,6 @@ def apply_U(state, gates, gate_ordering_idx_list, masks_dict, K=None):
 
 #########################################################################
 
-def get_magn(state):
-    '''
-    Calculate the magnetization of the state
-    '''
-    N = int(np.log2(len(state)))
-    M = 0
-    for n in range(N):
-        paulis = [I]*N
-        paulis[n] = Z
-        s_z_n = reduce(np.kron, paulis)
-        M += (state.conj().T @ s_z_n @ state).real
-    return M
-
-def r_y(theta):
-    return np.cos(theta/2)*I - 1j*np.sin(theta/2)*Y
-
-def initial_entangled_state(N, theta, state_phases):
-    """
-    Generate the state |\psi> = \bigotimes_{i=0}^{N/2-1} |\Psi^+>_{(N/2 - i), (N/2 + i)}
-    for an N-qubit system, where N is even.
-
-    Parameters:
-        N (int): Total number of qubits, must be even.
-
-    Returns:
-        numpy.ndarray: State vector of the entangled system.
-    """
-    def generate_initial_order(N):
-        """Generate the initial qubit order [0, N-1, 1, N-2, ...]."""
-        order = []
-        for i in range(N // 2):
-            order.append(i)
-            order.append(N - 1 - i)
-        if N % 2 == 1:
-            order.append(N // 2)
-        return order
-
-    def resort_state_vector_general(state_vector, N):
-        """Resort a state vector with N qubits from [0, N-1, 1, N-2, ...] to canonical [0, 1, 2, ...]."""
-        num_states = len(state_vector)
-        num_qubits = int(np.log2(num_states))
-        
-        assert num_qubits == N, "State vector size does not match qubit count."
-        assert 2**N == num_states, "State vector size is not a power of 2."
-
-        # Generate initial qubit order and its inverse mapping
-        initial_order = generate_initial_order(N)
-
-        # New state vector
-        new_state_vector = np.zeros_like(state_vector, dtype=complex)
-
-        # Permute indices
-        for i in range(num_states):
-            # Convert index to binary, rearrange bits, then convert back to integer
-            binary = f"{i:0{N}b}"  # Binary representation with padding
-            rearranged_binary = "".join(binary[initial_order.index(j)] for j in range(N))
-            new_index = int(rearranged_binary, 2)
-            new_state_vector[new_index] = state_vector[i]
-
-        return new_state_vector
-
-    states = []
-    for n in range(N//2):
-        if state_phases == 'homogenous':
-            phase = 1
-        elif state_phases == 'staggered':
-            phase = (-1)**n
-        st = np.sin(theta * phase)
-        ct = np.cos(theta * phase)
-        st_1 = np.sin(theta * phase/2)
-        st_2 = np.sin(theta * phase/2)
-        ct_2 = np.cos(theta * phase/2)
-        # if n != 4:
-        #     state = np.array([-st, ct, ct, st])/np.sqrt(2) # ry(theta)ry(theta) |Psi+>
-        # else:
-        state = np.array([ct, st, st, -ct])/np.sqrt(2) # ry(theta)ry(theta) |Phi->, not preserving M
-            # state = np.array([ct_2**2, st_1/2, st_1/2, st_2**2]) # ry(theta)ry(theta) |00>
-
-        states.append(state)
-
-    unsorted_state = reduce(np.kron, states)
-    return resort_state_vector_general(unsorted_state, N)
-
-def initial_state(N, qkeep, theta, state_phases):
-    '''
-    Create the initial state as (exp(-i theta/2 sigma_y) |0>)^\otimes N
-    '''
-
-    states_n = []
-    for n in range(N):
-        if n not in qkeep:
-            theta_ = .0 * np.pi #np.pi/2
-        else:
-            theta_ = theta
-        if state_phases == 'homogenous':
-            state_n = r_y(theta_) @ np.array([1, 0])
-        elif state_phases == 'staggered':
-            state_n = r_y(theta_) @ (np.array([1, 0]) if n%2==0 else np.array([0, 1]))
-        
-        states_n.append(state_n)
-
-    state = reduce(np.kron, states_n)
-
-    return state
-
 def ptrace(rho, qkeep):
     N = int(np.log2(rho.shape[0]))
     rd = [2,] * N
@@ -404,88 +264,10 @@ def gen_su2(J=None):
     gate = np.eye(4) * np.cos(J/2) - 1j * np.sin(J/2) * swap
     return gate
 
-def gen_gates_order(N, geometry='brickwork', boundary_conditions='PBC', eo_first='True'):
-    # Generate the order the gates will be applied
-    if geometry == 'random':
-        if boundary_conditions == 'PBC':
-            return rd.sample([n for n in range(N)],N)
-        elif boundary_conditions == 'OBC':
-            return rd.sample([n for n in range(N-1)],N-1)
-    if geometry != 'brickwork':
-        raise ValueError('Only random and brickwork geometries are supported')
-    gate_ordering_idx_list = []
-    if eo_first:
-        for n in range(N):
-            if n % 2 == 0:
-                if n == N-1 and boundary_conditions == 'OBC':
-                    continue
-                else:
-                    gate_ordering_idx_list.append(n)
-    for n in range(N):
-        if n % 2 == 1:
-            if n == N-1 and boundary_conditions == 'OBC':
-                continue
-            else:
-                gate_ordering_idx_list.append(n)
-    if not eo_first:
-        for n in range(N):
-            if n % 2 == 0:
-                if n == N-1 and boundary_conditions == 'OBC':
-                    continue
-                else:
-                    gate_ordering_idx_list.append(n)
-
-    return np.array(gate_ordering_idx_list, dtype=int)
-
 def vNE(rho):
     eigvals = np.linalg.eigvalsh(rho)
     eigvals = eigvals[eigvals > 1e-10]
-
-
     return -np.sum(eigvals*np.log2(eigvals))
-
-
-def gen_Ls(Ns, circuit_type):
-    if circuit_type == 'u1':
-        L = np.zeros((2**Ns, 2**Ns), dtype=complex)
-        for n in range(Ns):
-            paulis = [I]*Ns
-            paulis[n] = Z
-            L += reduce(np.kron, paulis)
-        return [L]
-    elif circuit_type == 'su2':
-        Ls = []
-        for PAULI in [X, Y, Z]:
-            for n in range(Ns):
-                L = np.zeros((2**Ns, 2**Ns), dtype=complex)
-                paulis = [I]*Ns
-                paulis[n] = PAULI
-                L += reduce(np.kron, paulis)
-            Ls.append(L)
-        return Ls
-
-def WY(rho_A, Ls):
-    # compute Wigner-Yanase skew information
-    rho_A_sqrt = la.sqrtm(rho_A)
-    WYs = []
-    for L in Ls:
-        WYs.append(
-            np.trace(L @ rho_A @ L) - np.trace(rho_A_sqrt @ L @ rho_A_sqrt @ L))
-    if len(WYs) == 1:
-        return WYs[0].real
-    return np.array(WYs).real
-
-def gen_QFI(rho_A, Ls, ss):
-    # compute QFI information
-    # ss is a list of parameters s, where s=0 for SLD and s=1 for RLD and s=.5 for WY
-    rho_A_sqrt = la.sqrtm(rho_A)
-    QFIs = np.zeros((len(Ls), len(ss)))
-    for Lidx, L in enumerate(Ls):
-        LrhoL = np.trace(L @ rho_A @ L)
-        for sidx, s in enumerate(ss):
-            rhoLrhoL = np.trace(fmp(rho_A, s) @ L @ fmp(rho_A, 1-s) @ L)
-            QFIs[Lidx, sidx] = (LrhoL - rhoLrhoL).real
-    return QFIs
 
 def load_mask_memory(N, K=2):
     '''
@@ -617,19 +399,6 @@ def gate_xxz_disordered(J, Jz, h1, h2, phi):
     U_XXZ = U_PM_MP @ U_ZZ
     return U_H1 @ U_XXZ
 
-def gen_MagMask(masks_dict):
-    '''generate mask for magnetization calculation'''
-    N = len(masks_dict)
-    magn_mask_is = np.zeros((N, 2**N))
-    for i in range(N):
-        masks = masks_dict[N - i - 1]
-        qubit_up_mask = masks[0].tolist() + masks[1].tolist()
-        magn_mask_i = np.zeros(2**N)
-        magn_mask_i[qubit_up_mask] = 1
-        magn_mask_is[i] = 2*magn_mask_i-1
-    return magn_mask_is
-
-
 def gen_Jz(N):
     """
     Generate the Jz operator for N spins.
@@ -643,20 +412,6 @@ def gen_Jz(N):
         op = reduce(np.kron, ops)
         Jz += op
     return Jz
-
-def get_magnetization_slow(st, N, operators=None):
-    id_ = np.diag([1,1])
-    sz = np.diag([1,-1])
-    res = np.zeros(N, dtype=np.float64)
-    for i in range(N):
-        if operators is None:
-            ops = [id_] * N
-            ops[i] = sz
-            op = reduce(np.kron, ops)
-        else:
-            op = operators[i]
-        res[i] = st.conj().dot(op @ st)
-    return np.array(res)
 
 def get_magnetization(st, N):
     id_ = np.array([1,1])
@@ -677,8 +432,6 @@ def get_magnetization(st, N):
         
     return res
 
-
-
 @njit(parallel=True, fastmath=True, cache=True)
 def compute_magn(psi_2, magn_mask_is):
     N = int(np.log2(len(psi_2)))
@@ -687,239 +440,8 @@ def compute_magn(psi_2, magn_mask_is):
         magn_is[i] = np.dot(psi_2, magn_mask_is[i]).real
     return magn_is
 
-def compute_single_trajectory(gates, order, psi_0, T, masks_dict, magn_mask_is):
-    spin_densities_list = []
-    psi_2 = psi_0.conj() * psi_0    
-    magnetization = compute_magn(psi_2, magn_mask_is)
-    spin_densities_list.append(magnetization)
-    N = len(order)
-
-    for t in range(T):
-        if t < N:
-
-            for order_idx, gate_idx in enumerate(order):
-                psi_0 = apply_gate(psi_0, gates[order_idx], masks_dict[gate_idx])
-                psi_2 = psi_0.conj() * psi_0 
-                magnetization = compute_magn(psi_2, magn_mask_is)   
-                spin_densities_list.append(magnetization)
-        else:
-            psi_0 = apply_U(psi_0, gates, order, masks_dict)
-            psi_2 = psi_0.conj() * psi_0    
-            magnetization = compute_magn(psi_2, magn_mask_is)
-            spin_densities_list.append(magnetization)
-
-    return np.array(spin_densities_list)
-
-def gen_t_list(N, T):
-    '''generate time list
-    First N steps computed gate by gate
-    Then stroboscopic steps computed at each whole time step up to T
-    '''
-    additional_steps = (np.arange(N).reshape(N, 1) + 
-                    (np.arange(1, N + 1) / N)
-                    ).flatten()
-    stroboscobic = np.arange(N,T)
-    return np.concatenate(([0], additional_steps, stroboscobic))
-
-def gen_initial_state(masks_dict, rnd_seed=None):
-    '''generate initial state
-    |0>^{\otimes N} with the first qubit up
-
-    verify it with 
-        psi_2 = psi_0.conj() * psi_0    
-        fn.compute_magn(psi_2, magn_mask_is)
-    '''
-    N = len(masks_dict)
-    if rnd_seed is not None:
-        nprd.seed(rnd_seed)
-    psi_0 = nprd.uniform(0,1,2**N) + 1.0j*nprd.uniform(0,1,2**N)
-    qubit_0_down_mask = masks_dict[0][2].tolist() + masks_dict[0][3].tolist()
-    psi_0[qubit_0_down_mask] = 0
-    return psi_0 / np.sqrt(np.dot(psi_0.conj(), psi_0))
-
-def apply_single_z(psi_0, masks_dict):
-    psi = psi_0.copy()
-    N = len(masks_dict)
-    for i in range(0, N, 2):
-        h1, h2 = nprd.uniform(-np.pi, np.pi, 2)
-        ZZ_random = np.diag(np.exp(-.5j*np.array([h1+h2, h1-h2, h2-h1, -h1-h2])))
-        psi = apply_gate(psi, ZZ_random, masks_dict[i])
-    return psi
-
-# def compute_single_trajectory_with_trick(params, order, psi_0, T, 
-#                                          disorder_realizations, masks_dict, magn_mask_is):
-#     N = len(order)
-#     numb_steps = (T-N) + N**2 + 1
-#     spin_evol = np.zeros((disorder_realizations, numb_steps, N))
-
-#     for realization in range(disorder_realizations):
-#         psi_r = apply_single_z(psi_0, masks_dict)
-#         psi_2 = psi_r.conj() * psi_r    
-#         magnetization = compute_magn(psi_2, magn_mask_is)
-#         spin_evol[realization, 0, :] = magnetization
-
-#     J, Jz = params
-
-#     for t in tqdm(range(T)):
-#         if t < N:
-#             phis = nprd.uniform(-np.pi, np.pi, N)
-#             hs = nprd.uniform(-np.pi, np.pi, 2*N)
-#             gates = np.array([gate_xxz_disordered(J, Jz, hs[2*i], 
-#                                                   hs[2*1+1], phis[i]) for i in range(N)])
-            
-#             for order_idx, gate_idx in enumerate(order):
-#                 psi_0 = apply_gate(psi_0, gates[order_idx], masks_dict[gate_idx])
-
-#                 for realization in range(disorder_realizations):
-#                     psi_r = apply_single_z(psi_0, masks_dict)
-#                     psi_2 = psi_r.conj() * psi_r    
-#                     magnetization = compute_magn(psi_2, magn_mask_is)
-#                     spin_evol[realization, t*N + order_idx, :] = magnetization
-#         else:
-#             for realization in range(disorder_realizations):
-#                 psi_r = apply_single_z(psi_0, masks_dict)
-#                 psi_2 = psi_r.conj() * psi_r    
-#                 magnetization = compute_magn(psi_2, magn_mask_is)
-#                 spin_evol[realization, (t-N) + N**2, :] = magnetization
-
-#     return spin_evol
-
-def gen_PS():
-    '''Generate a random product state on one qubit'''
-    state = np.random.rand(2) + 1j * np.random.rand(2)
-    return state / np.linalg.norm(state)
-
-def initial_mixed_state(N, theta, state_phases, p):
-    '''Generate a random product state on N qubits'''
-    # Generate id + p Product State
-    paulis = []
-    for n in range(N):
-        if np.random.rand() < p:
-            if state_phases == 'homogenous':
-                phase = 1
-            elif state_phases == 'staggered':
-                phase = (-1)**n
-            state = r_y(phase*theta) @ np.array([1, 0])
-            paulis.append(state)
-        else:
-            if np.random.rand() < .5:
-                paulis.append(UP)
-            else:
-                paulis.append(DOWN)
-    return reduce(np.kron, paulis)
-
 def is_bad_value(coeff):
     return coeff == 0 or np.isnan(coeff) or np.isinf(coeff) or not np.isfinite(coeff)
-
-def generic_coherence_measure(rho, eigvals, eigvecs, Ls, f):
-    '''From eq.1.44 of
-    Irénée Frerot. A quantum statistical approach to quantum correlations in many-body systems. 
-    Statistical Mechanics [cond-mat.stat-mech]. Université de Lyon, 2017. 
-    
-    f is a standard monotone function.
-    the mixed state is assumed to be 
-                ρ = p |ψ⟩⟨ψ| + (1 - p) 𝕀/d
-    where |psi> is the tilted state and Id/d is the maximally mixed state:
-            |ψ(θ)⟩ = e^(-iθ/2 ∑ₖ σₖʸ) |000...0⟩
-            
-    ρ_A = Tr_{B} ρ
-    '''
-    Coherent = np.zeros(len(Ls))
-    # Op = np.zeros(len(Ls))
-    
-    # if f == f_SLD:
-    #     sigma = L @ rho @ L
-    #     rho_1 = la.inv(rho)
-    #     Op = np.trace(rho @  L @ rho_1 @ L @ rho - rho @ sigma @ rho_1 - rho + L @ rho @ rho @ L @ rho_1)
-    
-    # if f == f_WY:
-    #     Op = WY(rho, Ls)
-        
-    # if f == f_rel_ent:
-    #     sigma = L @ rho @ L
-    #     log_rho = la.logm(rho) # stable_logm(rho)
-    #     log_sigma = la.logm(sigma)
-    #     Op = np.trace(sigma @ log_sigma) - np.trace(sigma @ log_rho)
-    
-    # if f == f_q_info_var:
-    # ### TO BE COMPLETED
-    
-    # if f == f_geo_mean:
-    # ### TO BE COMPLETED
-    
-    # if f == f_harm_mean:
-    #     rho_1 = la.inv(rho)
-    #     Op = (np.trace(L @ rho @ rho @ L @ rho_1) - np.trace(L @ rho @ L))/2
-        
-    eigvals[eigvals < 1e-12] = 0
-        
-    indexes = np.argsort(eigvals)
-    eigvals = eigvals[indexes]
-    eigvecs = eigvecs.T[indexes]
-            
-    for i, eigval_i in enumerate(eigvals): # Apply L on the state
-        Ls_eigvec_i = [L @ eigvecs[i] for L in Ls]
-        
-        for j, eigval_j in enumerate(eigvals):
-            if i==j: continue
-            try:
-                coeff = ((eigval_i - eigval_j)**2/(eigval_i*f((eigval_j/(eigval_i))))) 
-            except ZeroDivisionError:
-                pass
-            if is_bad_value(coeff): 
-                try:
-                    coeff = ((eigval_j - eigval_i)**2/(eigval_j*f((eigval_i/(eigval_j))))) 
-                except ZeroDivisionError:
-                    pass
-                if is_bad_value(coeff): 
-                    continue
-        
-            Coherent += [coeff * np.abs(eigvecs[j].conj().dot(Li))**2 for Li in Ls_eigvec_i]
-                
-    if not (f(0) == 0 or np.isnan(f(0))): Coherent *= f(0)/2 # Removed for the QFIs with f(0) = 0
-    else: Coherent *= 1/2
-            
-    return Coherent
-
-def compute_incoherent_fisher_info(p_t, p_t_minus_dt, dt):
-    epsilon = 1e-12  # Small constant to avoid division by zero
-    # Step 1: Compute dp/dt using backward difference
-    dp_dt = (p_t - p_t_minus_dt) / dt
-    # Step 2: Compute d/dt(log(p)) = dp/dt / p
-    log_p_derivative = dp_dt / (p_t + epsilon)
-    # Step 3: Compute the weighted sum for F_Q^IC
-    F_Q_IC = np.sum(p_t * log_p_derivative**2)
-    return F_Q_IC
-
-
-def f_SLD(x): # Bures metric: f(x) = (x + 1) / 2
-    return (x + 1) / 2 # y * f(x/y) = y * (x/y + 1) / 2 = (x + y) / 2
-
-def f_Heinz(x, r): # Heinz family:: f(x) = (x^r + x^(1-r)) / 2
-    return (x**r + x**(1 - r)) / 2
-
-def f_ALPHA(x, alpha): # Alpha-divergency: f(x) = α(α - 1)(x - 1)^2 / ((x - x^α)(x^α - 1))
-    numerator = alpha * (alpha - 1) * (x - 1)**2
-    denominator = (x - x**alpha) * (x**alpha - 1)
-    return numerator / denominator
-
-def f_WY(x): # Wigner-Yanase metric: f(x) = (1/4) * (1 + sqrt(x))^2
-    return (1 / 4) * (1 + np.sqrt(x))**2 # (pi-pj)/((1/4) * (pi+pj)^2/pi) = 4pi(pi-pj)/(pi+pj)^2 != sqrt(pi*pj)
-
-def f_rel_ent(x): # Relative entropy: f(x) = (x - 1) / log(x)
-    return (x - 1) / np.log(x)
-
-def f_q_info_var(x): # Quantum information variance: f(x) = (2 * (x - 1)^2) / ((x + 1) * (log(x))^2)
-    numerator = 2 * (x - 1)**2
-    denominator = (x + 1) * (np.log(x)**2)
-    return numerator / denominator
-
-def f_geo_mean(x): # Geometric mean: f(x) = sqrt(x)
-    return np.sqrt(x)
-
-def f_harm_mean(x): # Harmonic mean: f(x) = (2 * x) / (x + 1)
-    return (2 * x) / (x + 1)
-
 
 def find_crossing_times(x_vals, y_vals1, y_vals2):
     """
@@ -951,6 +473,40 @@ def find_crossing_times(x_vals, y_vals1, y_vals2):
     
     return np.array(crossing_times)
 
+
+def gen_gates_order(N, geometry='random', boundary_conditions='PBC', eo_first='True'):
+    # Generate the order the gates will be applied
+    if geometry == 'random':
+        if boundary_conditions == 'PBC':
+            return rd.sample([n for n in range(N)],N)
+        elif boundary_conditions == 'OBC':
+            return rd.sample([n for n in range(N-1)],N-1)
+    if geometry != 'brickwork':
+        raise ValueError('Only random and brickwork geometries are supported')
+    gate_ordering_idx_list = []
+    if eo_first:
+        for n in range(N):
+            if n % 2 == 0:
+                if n == N-1 and boundary_conditions == 'OBC':
+                    continue
+                else:
+                    gate_ordering_idx_list.append(n)
+    for n in range(N):
+        if n % 2 == 1:
+            if n == N-1 and boundary_conditions == 'OBC':
+                continue
+            else:
+                gate_ordering_idx_list.append(n)
+    if not eo_first:
+        for n in range(N):
+            if n % 2 == 0:
+                if n == N-1 and boundary_conditions == 'OBC':
+                    continue
+                else:
+                    gate_ordering_idx_list.append(n)
+
+    return np.array(gate_ordering_idx_list, dtype=int)
+
 def compute_unitary(gates, order, masks_dict, N):
     '''
     Compute the unitary of the circuit
@@ -971,28 +527,6 @@ def compute_hamiltonian(gates, order, masks_dict, N):
     # compute the log of the eigenvalues
     log_eigvals = np.log(eigvals)
     return eigvecs.T.conj() @ log_eigvals @ eigvecs
-
-
-@njit(parallel=True, fastmath=True, cache=True)
-def compute_projector(Ns, states):
-    """
-    Computes the projector onto the subspace spanned by the computational basis 
-    states in the list 'states'. Each state is assumed to be an integer corresponding 
-    to the basis index.
-    """
-    dim = 2**Ns
-    P = np.zeros((dim, dim), dtype=np.complex128)
-    for state_1 in states:
-        v_1 = np.zeros(dim, dtype=np.complex128)
-        v_1[state_1] = 1.0
-        for state_2 in states:
-            v_2 = np.zeros(dim, dtype=np.complex128)
-            v_2[state_2] = 1.0
-            # Add the projector for this state
-            P += np.outer(v_1, v_2)
-    # normalize
-    P /= np.linalg.norm(P)
-    return P
 
 @njit(parallel=True, fastmath=True, cache=True)
 def compute_projector(Ns, states):
@@ -1252,7 +786,6 @@ def max_divergence(rho: np.ndarray, sigma: np.ndarray, epsilon=1e-10) -> float:
     return np.log(lambda_max)
 
 
-
 def decompose_rho_modes(rho, Ub, Op):
     """
     Decomposes the density matrix 'rho' into its frequency (charge difference) modes.
@@ -1331,7 +864,6 @@ for name, (rho, sigma) in test_pairs.items():
 '''
 
 # U1 ############
-
 def spin_basis_1d(N, m=0.0, dtype=np.uint32, tol=1e-8):
     """
     NumPy‐only re‑implementation of quspin.basis.spin_basis_1d
@@ -1431,6 +963,93 @@ def build_projectors(Ns):
         # Compute the projector onto the subspace spanned by these states.
         projectors[m] = compute_projector(Ns, states_m)
         
-
-        
     return projectors, U_U1
+
+
+def _infer_subsystem_dims(psi):
+    """
+    Given a statevector of length D, infer total qubit count N and
+    split into nA = N//2 qubits for A and nB = N − nA for B.
+    Returns (dA, dB).
+    """
+    D = psi.size
+    # total qubits
+    N = int(np.log2(D))
+    if 2**N != D:
+        raise ValueError(f"Length {D} is not a power of two.")
+    nA = N // 2
+    dA = 2**nA
+    dB = 2**(N - nA)
+    return dA, dB
+
+def schmidt_coeffs(psi: np.ndarray):
+    """
+    Compute the normalized Schmidt coefficients of |psi⟩
+    splitting into A⊗B with an equal‑qubit cut.
+    """
+    dA, dB = _infer_subsystem_dims(psi)
+    M = psi.reshape((dA, dB))
+    s = np.linalg.svd(M, compute_uv=False)
+    return s / np.linalg.norm(s)
+
+def entanglement_entropy(psi: np.ndarray, base: float = 2.0):
+    """
+    von Neumann entanglement entropy S = −∑ p_i log_b p_i,
+    where p_i = s_i^2 are Schmidt probabilities.
+    """
+    s = schmidt_coeffs(psi)
+    p = s**2
+    p = p[p > 0]
+    return -np.sum(p * np.log(p)) / np.log(base)
+
+def renyi_entanglement(psi: np.ndarray, alpha: float = 2, base: float = np.e):
+    """
+    Rényi entanglement entropy S_α = (1/(1-α)) log_b ∑ p_i^α.
+    """
+    s = schmidt_coeffs(psi)
+    p = s**2
+    if np.isclose(alpha, 1.0):
+        return entanglement_entropy(psi, base)
+    return (1.0/(1.0-alpha)) * np.log(np.sum(p**alpha)) / np.log(base)
+
+
+def participation_entropy(psi: np.ndarray,
+                          k: float = 2,
+                          base: float = np.e,
+                          eps: float = 1e-12) -> float:
+    """
+    Compute the Rényi participation entropy S_k(|psi>).
+
+    Parameters
+    ----------
+    psi : np.ndarray
+        State vector of length D (complex or real).
+    k : float
+        Rényi index. If k==1 (within eps), returns the Shannon entropy.
+    base : float, optional
+        Logarithm base (default: natural log). For bits use base=2.
+    eps : float, optional
+        Tolerance for detecting k==1.
+
+    Returns
+    -------
+    S_k : float
+        Participation entropy.
+    """
+    # Compute probabilities p_x = |<x|psi>|^2
+    p = np.abs(psi)**2
+
+    # Normalize (in case psi isn't strictly normalized)
+    p_sum = p.sum()
+    if not np.isclose(p_sum, 1.0, atol=eps):
+        p = p / p_sum
+
+    # Shannon limit
+    if np.isclose(k, 1.0, atol=eps):
+        # avoid log(0) with masking
+        mask = p > 0
+        return -np.sum(p[mask] * np.log(p[mask]) / np.log(base))
+
+    # Rényi form
+    sum_p_k = np.sum(p**k)
+    return (1.0 / (1.0 - k)) * np.log(sum_p_k) / np.log(base)
