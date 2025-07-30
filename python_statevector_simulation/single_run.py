@@ -107,8 +107,16 @@ def compute_and_save(args, circuits, masks):
         Jx, Jz = circ.couplings
         m_dir = os.path.join(args.output_magic, f"Jx{Jx:.2f}", f"Jz{Jz:.2f}")
         e_dir = os.path.join(args.output_entanglement, f"Jx{Jx:.2f}", f"Jz{Jz:.2f}")
-        os.makedirs(m_dir, exist_ok=True)
-        os.makedirs(e_dir, exist_ok=True)
+        
+        # Create directories with error handling
+        try:
+            os.makedirs(m_dir, exist_ok=True)
+            os.makedirs(e_dir, exist_ok=True)
+        except OSError as e:
+            print(f"Error creating directories: {e}")
+            print(f"  Magic dir: {m_dir}")
+            print(f"  Entanglement dir: {e_dir}")
+            raise
 
         m_path = os.path.join(m_dir, f"cr{cr}.npz")
         e_path = os.path.join(e_dir, f"cr{cr}.npz")

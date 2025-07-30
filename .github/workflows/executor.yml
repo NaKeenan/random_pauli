@@ -115,10 +115,13 @@ jobs:
             --T ${{ github.event.inputs.T }} \
             --circuit-realizations ${{ github.event.inputs.circuit_realizations }} \
             --L ${{ github.event.inputs.L }} \
+            --params-path ../random_archive/angles_N${{ github.event.inputs.N }}.json \
+            --output-magic results/magic/N${{ github.event.inputs.N }}/T${{ github.event.inputs.T }} \
+            --output-entanglement results/entanglement/N${{ github.event.inputs.N }}/T${{ github.event.inputs.T }} \
             $POINT_FLAGS
 
       - name: Upload batch artifacts
         uses: actions/upload-artifact@v4
         with:
           name: results-batch-${{ matrix.batch_index }}
-          path: results/
+          path: python_statevector_simulation/results/

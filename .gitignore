@@ -1,10 +1,8 @@
-<<<<<<< HEAD
-logs/
-pauli_results/
-misc/
-=======
 pauli_results
 pauli_results_test
 logs
->>>>>>> 7e1d124e3a9cd20b770821f6af4060a1e30537c2
 pauli_results_manual/
+pauli_results
+pauli_results_test
+logs
+python_statevector_simulation/results
